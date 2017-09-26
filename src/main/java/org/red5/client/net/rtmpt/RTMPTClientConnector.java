@@ -18,20 +18,12 @@
 
 package org.red5.client.net.rtmpt;
 
+import static org.apache.commons.io.output.NullOutputStream.NULL_OUTPUT_STREAM;
+
 import java.io.IOException;
 import java.util.List;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.HttpVersion;
-import org.apache.http.ParseException;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.util.EntityUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.mina.core.buffer.IoBuffer;
 import org.red5.client.net.rtmp.OutboundHandshake;
 import org.red5.client.net.rtmp.RTMPConnManager;
@@ -41,6 +33,17 @@ import org.red5.server.net.rtmp.codec.RTMP;
 import org.red5.server.util.HttpConnectionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import okhttp3.Call;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Request.Builder;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import okio.ByteString;
 
 /**
  * Client connector for RTMPT
@@ -53,17 +56,18 @@ public class RTMPTClientConnector extends Thread {
     private static final Logger log = LoggerFactory.getLogger(RTMPTClientConnector.class);
 
     protected static final String CONTENT_TYPE = "application/x-fcs";
+    protected static final MediaType ContentType = MediaType.parse(CONTENT_TYPE);
 
-    protected static final ByteArrayEntity ZERO_REQUEST_ENTITY = new ByteArrayEntity(new byte[] { 0 });
+    protected static final byte[] ZERO_REQUEST_ENTITY = new byte[] { 0 };
 
     /**
      * Size to split messages queue by, borrowed from RTMPTServlet.RESPONSE_TARGET_SIZE
      */
     protected static final int SEND_TARGET_SIZE = 32768;
 
-    protected HttpClient httpClient;
+    protected OkHttpClient httpClient;
 
-    protected HttpHost targetHost;
+    protected HttpUrl targetHost;
 
     protected RTMPTClient client;
 
@@ -82,13 +86,13 @@ public class RTMPTClientConnector extends Thread {
     }
 
     public RTMPTClientConnector(String server, int port, RTMPTClient client) {
-        targetHost = new HttpHost(server, port, "http");
+        targetHost = new HttpUrl.Builder().host(server).port(port).scheme("http").build();
         this.client = client;
     }
 
     @Override
     public void run() {
-        HttpPost post = null;
+        Call call = null;
         try {
             RTMPTClientConnection conn = openConnection();
             // set a reference to the connection on the client
@@ -98,21 +102,22 @@ public class RTMPTClientConnector extends Thread {
             while (!conn.isClosing() && !stopRequested) {
                 IoBuffer toSend = conn.getPendingMessages(SEND_TARGET_SIZE);
                 int limit = toSend != null ? toSend.limit() : 0;
+                Builder post = null;
                 if (toSend != null && limit > 0) {
                     post = makePost("send");
-                    post.setEntity(new InputStreamEntity(toSend.asInputStream(), limit));
-                    post.addHeader("Content-Type", CONTENT_TYPE);
+                    post.post(RequestBody.create(ContentType, ByteString.read(toSend.asInputStream(), limit)));
                 } else {
                     post = makePost("idle");
-                    post.setEntity(ZERO_REQUEST_ENTITY);
-                    post.addHeader("Content-Type", CONTENT_TYPE);
+                    post.post(RequestBody.create(ContentType, ZERO_REQUEST_ENTITY));
                 }
                 // execute
-                HttpResponse response = httpClient.execute(targetHost, post);
+                call = httpClient.newCall(post.build());
+                Response response = call.execute();
                 // check for error
                 checkResponseCode(response);
                 // handle data
-                byte[] received = EntityUtils.toByteArray(response.getEntity());
+                ResponseBody body = response.body();
+                byte[] received = body == null ? new byte[0] : body.bytes();
                 // wrap the bytes
                 IoBuffer data = IoBuffer.wrap(received);
                 log.debug("State: {}", RTMP.states[conn.getStateCode()]);
@@ -131,7 +136,7 @@ public class RTMPTClientConnector extends Thread {
                         Thread.sleep(250);
                     } catch (InterruptedException e) {
                         if (stopRequested) {
-                            post.abort();
+                            call.cancel();
                             break;
                         }
                     }
@@ -150,8 +155,8 @@ public class RTMPTClientConnector extends Thread {
         } catch (Throwable e) {
             log.debug("RTMPT handling exception", e);
             client.handleException(e);
-            if (post != null) {
-                post.abort();
+            if (call != null) {
+                call.cancel();
             }
         } finally {
             Red5.setConnectionLocal(null);
@@ -167,17 +172,16 @@ public class RTMPTClientConnector extends Thread {
 
     private RTMPTClientConnection openConnection() throws IOException {
         RTMPTClientConnection conn = null;
-        HttpPost openPost = getPost("/open/1");
+        Builder openPost = getPost(targetHost.resolve("/open/1"));
         setCommonHeaders(openPost);
-        openPost.addHeader("Content-Type", CONTENT_TYPE);
-        openPost.setEntity(ZERO_REQUEST_ENTITY);
+        openPost.post(RequestBody.create(ContentType, ZERO_REQUEST_ENTITY));
         // execute
-        HttpResponse response = httpClient.execute(targetHost, openPost);
+        Response response = httpClient.newCall(openPost.build()).execute();
         checkResponseCode(response);
         // get the response entity
-        HttpEntity entity = response.getEntity();
+        ResponseBody entity = response.body();
         if (entity != null) {
-            String responseStr = EntityUtils.toString(entity);
+            String responseStr = entity.string();
             sessionId = responseStr.substring(0, responseStr.length() - 1);
             log.debug("Got an id {}", sessionId);
             // create a new connection
@@ -202,21 +206,22 @@ public class RTMPTClientConnector extends Thread {
 
     protected void finalizeConnection() throws IOException {
         log.debug("Sending close post");
-        HttpPost closePost = getPost(makeUrl("close"));
-        closePost.addHeader("Content-Type", CONTENT_TYPE);
-        closePost.setEntity(ZERO_REQUEST_ENTITY);
-        HttpResponse response = httpClient.execute(targetHost, closePost);
-        EntityUtils.consume(response.getEntity());
+        Builder closePost = getPost(targetHost.resolve(makeUrl("close")));
+        closePost.post(RequestBody.create(ContentType, ZERO_REQUEST_ENTITY));
+        Response response = httpClient.newCall(closePost.build()).execute();
+        ResponseBody body = response.body();
+        if (body != null) {
+            IOUtils.copy(body.byteStream(), NULL_OUTPUT_STREAM);
+        }
     }
 
-    protected static HttpPost getPost(String uri) {
-        HttpPost post = new HttpPost(uri);
-        post.setProtocolVersion(HttpVersion.HTTP_1_1);
-        return post;
+    protected static Request.Builder getPost(HttpUrl url) {
+        return new Request.Builder().url(url);
+        //        post.setProtocolVersion(HttpVersion.HTTP_1_1);
     }
 
-    protected HttpPost makePost(String command) {
-        HttpPost post = getPost(makeUrl(command));
+    protected Request.Builder makePost(String command) {
+        Builder post = getPost(targetHost.resolve(makeUrl(command)));
         setCommonHeaders(post);
         return post;
     }
@@ -226,15 +231,16 @@ public class RTMPTClientConnector extends Thread {
         return String.format("/%s/%s/%s", command, sessionId, messageCount++);
     }
 
-    protected static void setCommonHeaders(HttpPost post) {
+    protected static void setCommonHeaders(Request.Builder post) {
         post.addHeader("Connection", "Keep-Alive");
         post.addHeader("Cache-Control", "no-cache");
     }
 
-    protected static void checkResponseCode(HttpResponse response) throws ParseException, IOException {
-        int code = response.getStatusLine().getStatusCode();
-        if (code != HttpStatus.SC_OK) {
-            throw new RuntimeException("Bad HTTP status returned, line: " + response.getStatusLine() + "; body: " + EntityUtils.toString(response.getEntity()));
+    protected static void checkResponseCode(Response response) throws IOException {
+        int code = response.code();
+        if (code != 200) {
+            ResponseBody body = response.body();
+            throw new RuntimeException("Bad HTTP status returned, line: " + response.message() + "; body: " + (body == null ? "null" : body.string()));
         }
     }
 

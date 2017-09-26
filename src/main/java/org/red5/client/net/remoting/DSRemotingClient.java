@@ -18,15 +18,11 @@
 
 package org.red5.client.net.remoting;
 
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.util.EntityUtils;
 import org.apache.mina.core.buffer.IoBuffer;
 import org.red5.compatibility.flex.messaging.messages.AcknowledgeMessage;
 import org.red5.compatibility.flex.messaging.messages.AcknowledgeMessageExt;
@@ -44,6 +40,14 @@ import org.red5.server.net.remoting.RemotingClient;
 import org.red5.server.net.remoting.RemotingHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import okhttp3.Call;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+import okhttp3.Request.Builder;
+import okio.ByteString;
 
 /**
  * Client interface for remoting calls directed at an LCDS or BlazeDS style service.
@@ -291,28 +295,27 @@ public class DSRemotingClient extends RemotingClient {
         IoBuffer resultBuffer = null;
         IoBuffer data = encodeInvoke(method, params);
         //setup POST
-        HttpPost post = null;
+        Call post = null;
         try {
-            post = new HttpPost(url + appendToUrl);
-            post.addHeader("Content-Type", CONTENT_TYPE);
-            post.setEntity(new InputStreamEntity(data.asInputStream(), data.limit()));
+            Request _post = new Request.Builder().url(url + appendToUrl).post(RequestBody.create(ContentType, ByteString.read(data.asInputStream(), data.limit()))).build();
             // execute the method
-            HttpResponse response = client.execute(post);
-            int code = response.getStatusLine().getStatusCode();
+            post = client.newCall(_post);
+            Response response = post.execute();
+            int code = response.code();
             log.debug("HTTP response code: {}", code);
             if (code / 100 != 2) {
                 throw new RuntimeException("Didn't receive success from remoting server");
             } else {
-                HttpEntity entity = response.getEntity();
+                ResponseBody entity = response.body();
                 if (entity != null) {
                     //fix for Trac #676
-                    int contentLength = (int) entity.getContentLength();
+                    int contentLength = (int) entity.contentLength();
                     //default the content length to 16 if post doesn't contain a good value
                     if (contentLength < 1) {
                         contentLength = 16;
                     }
                     // get the response as bytes
-                    byte[] bytes = EntityUtils.toByteArray(entity);
+                    byte[] bytes = entity.bytes();
                     resultBuffer = IoBuffer.wrap(bytes);
                     resultBuffer.flip();
                     Object result = decodeResult(resultBuffer);
@@ -326,7 +329,7 @@ public class DSRemotingClient extends RemotingClient {
         } catch (Exception ex) {
             log.error("Error while invoking remoting method.", ex);
             if (post != null) {
-                post.abort();
+                post.cancel();
             }
         } finally {
             if (resultBuffer != null) {
