@@ -159,6 +159,9 @@ public class DSRemotingClient extends RemotingClient {
      */
     @Override
     protected void processHeaders(IoBuffer in) {
+        if (in == null) {
+            throw new IllegalArgumentException("processHeaders in == null");
+        }
         log.debug("RemotingClient processHeaders - buffer limit: {}", (in != null ? in.limit() : 0));
         int version = in.getUnsignedShort(); // skip
         log.debug("Version: {}", version);
@@ -216,6 +219,9 @@ public class DSRemotingClient extends RemotingClient {
      * @return Object deserialized from byte buffer data
      */
     private Object decodeResult(IoBuffer data) {
+        if (data == null) {
+            throw new IllegalArgumentException("decodeResult data == null");
+        }
         log.debug("decodeResult - data limit: {}", (data != null ? data.limit() : 0));
         processHeaders(data);
 
@@ -319,7 +325,9 @@ public class DSRemotingClient extends RemotingClient {
             }
         } catch (Exception ex) {
             log.error("Error while invoking remoting method.", ex);
-            post.abort();
+            if (post != null) {
+                post.abort();
+            }
         } finally {
             if (resultBuffer != null) {
                 resultBuffer.free();
