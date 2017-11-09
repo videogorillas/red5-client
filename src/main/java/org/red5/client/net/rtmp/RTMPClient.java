@@ -27,6 +27,7 @@ import org.apache.mina.core.future.ConnectFuture;
 import org.apache.mina.core.future.IoFutureListener;
 import org.apache.mina.core.session.IoSession;
 import org.apache.mina.transport.socket.SocketConnector;
+import org.apache.mina.transport.socket.SocketSessionConfig;
 import org.apache.mina.transport.socket.nio.NioSocketConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,10 +48,8 @@ public class RTMPClient extends BaseRTMPClientHandler {
 
     private static final Logger log = LoggerFactory.getLogger(RTMPClient.class);
 
-    protected static final int CONNECTOR_WORKER_TIMEOUT = 7000; // seconds
-
     // I/O handler
-    private final RTMPMinaIoHandler ioHandler;
+    protected RTMPMinaIoHandler ioHandler;
 
     // Socket connector, disposed on disconnect
     protected SocketConnector socketConnector;
@@ -59,7 +58,9 @@ public class RTMPClient extends BaseRTMPClientHandler {
     protected ConnectFuture future;
 
     // Connected IoSession
-    private IoSession session;
+    IoSession session;
+
+    protected long timeoutMsec = 7000L;
 
     /** Constructs a new RTMPClient. */
     public RTMPClient() {
@@ -81,6 +82,13 @@ public class RTMPClient extends BaseRTMPClientHandler {
     @Override
     protected void startConnector(String server, int port) {
         socketConnector = new NioSocketConnector();
+        socketConnector.setConnectTimeoutMillis(timeoutMsec);
+        SocketSessionConfig sessionConfig = socketConnector.getSessionConfig();
+        int timeoutSec = checkedCast(timeoutMsec / 1000);
+        sessionConfig.setBothIdleTime(timeoutSec);
+        sessionConfig.setReaderIdleTime(timeoutSec);
+        sessionConfig.setWriterIdleTime(timeoutSec);
+        sessionConfig.setWriteTimeout(timeoutSec);
         socketConnector.setHandler(ioHandler);
         future = socketConnector.connect(new InetSocketAddress(server, port));
         future.addListener(new IoFutureListener<ConnectFuture>() {
@@ -97,7 +105,7 @@ public class RTMPClient extends BaseRTMPClientHandler {
             }
         });
         // Now wait for the connect to be completed
-        future.awaitUninterruptibly(CONNECTOR_WORKER_TIMEOUT);
+        future.awaitUninterruptibly(timeoutMsec);
     }
 
     /** {@inheritDoc} */
@@ -145,4 +153,27 @@ public class RTMPClient extends BaseRTMPClientHandler {
         }
     }
 
+    @Override
+    public void setTimeout(long time, TimeUnit unit) {
+        this.timeoutMsec =  unit.toMillis(time);
+    }
+
+    /**
+     * Returns the {@code int} value that is equal to {@code value}, if possible.
+     *
+     * @param value
+     *            any value in the range of the {@code int} type
+     * @return the {@code int} value that equals {@code value}
+     * @throws IllegalArgumentException
+     *             if {@code value} is greater than {@link Integer#MAX_VALUE} or
+     *             less than {@link Integer#MIN_VALUE}
+     */
+    public static int checkedCast(long value) {
+        int result = (int) value;
+        if (result != value) {
+            // don't use checkArgument here, to avoid boxing
+            throw new IllegalArgumentException("Out of range: " + value);
+        }
+        return result;
+    }
 }

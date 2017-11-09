@@ -19,6 +19,7 @@
 package org.red5.client.net.rtmpt;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.mina.core.buffer.IoBuffer;
 import org.red5.client.net.rtmp.BaseRTMPClientHandler;
@@ -46,6 +47,8 @@ public class RTMPTClient extends BaseRTMPClientHandler {
     protected RTMPTClientConnector connector;
 
     protected RTMPTCodecFactory codecFactory;
+
+    long timeoutMsec = 7000L;
 
     public RTMPTClient() {
         protocol = "rtmpt";
@@ -165,4 +168,8 @@ public class RTMPTClient extends BaseRTMPClientHandler {
         return codecFactory.getRTMPEncoder();
     }
 
+    @Override
+    public void setTimeout(long time, TimeUnit unit) {
+        this.timeoutMsec = unit.toMillis(time);
+    }
 }

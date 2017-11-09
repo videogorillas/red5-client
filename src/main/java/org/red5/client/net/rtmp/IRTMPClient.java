@@ -1,6 +1,7 @@
 package org.red5.client.net.rtmp;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.red5.server.api.event.IEventDispatcher;
 import org.red5.server.api.service.IPendingServiceCallback;
@@ -10,6 +11,8 @@ import org.red5.server.net.rtmp.RTMPConnection;
 
 public interface IRTMPClient {
 	
+    public void setTimeout(long time, TimeUnit unit);
+    
 	public void setConnectionClosedHandler(Runnable connectionClosedHandler);
 
 	public void setExceptionHandler(ClientExceptionHandler exceptionHandler);

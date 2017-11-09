@@ -18,15 +18,10 @@
 
 package org.red5.client.net.rtmps;
 
-import java.net.InetSocketAddress;
-
 import javax.net.ssl.SSLContext;
 
-import org.apache.mina.core.future.IoFuture;
-import org.apache.mina.core.future.IoFutureListener;
 import org.apache.mina.core.session.IoSession;
 import org.apache.mina.filter.ssl.SslFilter;
-import org.apache.mina.transport.socket.nio.NioSocketConnector;
 import org.red5.client.net.rtmp.RTMPClient;
 import org.red5.client.net.rtmp.RTMPMinaIoHandler;
 import org.red5.client.net.ssl.BogusSslContextFactory;
@@ -48,10 +43,7 @@ import org.slf4j.LoggerFactory;
  */
 public class RTMPSClient extends RTMPClient {
 
-    private static final Logger log = LoggerFactory.getLogger(RTMPSClient.class);
-
-    // I/O handler
-    private final RTMPSClientIoHandler ioHandler;
+    static final Logger log = LoggerFactory.getLogger(RTMPSClient.class);
 
     /**
      * Password for accessing the keystore.
@@ -72,34 +64,6 @@ public class RTMPSClient extends RTMPClient {
         ioHandler.setHandler(this);
     }
 
-    @SuppressWarnings({ "rawtypes" })
-    @Override
-    protected void startConnector(String server, int port) {
-        socketConnector = new NioSocketConnector();
-        socketConnector.setHandler(ioHandler);
-        future = socketConnector.connect(new InetSocketAddress(server, port));
-        future.addListener(new IoFutureListener() {
-            @Override
-            public void operationComplete(IoFuture future) {
-                try {
-                    // will throw RuntimeException after connection error
-                    future.getSession();
-                } catch (Throwable e) {
-                    //if there isn't an ClientExceptionHandler set, a 
-                    //RuntimeException may be thrown in handleException
-                    handleException(e);
-                }
-            }
-        });
-        // Do the close requesting that the pending messages are sent before
-        // the session is closed
-        //future.getSession().close(false);
-        // Now wait for the close to be completed
-        future.awaitUninterruptibly(CONNECTOR_WORKER_TIMEOUT);
-        // We can now dispose the connector
-        //socketConnector.dispose();
-    }
-
     /**
      * Password used to access the keystore file.
      * 
@@ -118,7 +82,7 @@ public class RTMPSClient extends RTMPClient {
         this.keyStoreType = keyStoreType;
     }
 
-    private class RTMPSClientIoHandler extends RTMPMinaIoHandler {
+    class RTMPSClientIoHandler extends RTMPMinaIoHandler {
 
         /** {@inheritDoc} */
         @Override
@@ -127,9 +91,7 @@ public class RTMPSClient extends RTMPClient {
             SSLContext sslContext = BogusSslContextFactory.getInstance(false);
             SslFilter sslFilter = new SslFilter(sslContext);
             sslFilter.setUseClientMode(true);
-            if (sslFilter != null) {
-                session.getFilterChain().addFirst("sslFilter", sslFilter);
-            }
+            session.getFilterChain().addFirst("sslFilter", sslFilter);
             // END OF NATIVE SSL STUFF
             super.sessionOpened(session);
         }

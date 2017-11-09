@@ -77,16 +77,13 @@ public class RTMPTClientConnector extends Thread {
 
     protected volatile boolean stopRequested = false;
 
-    {
-        httpClient = HttpConnectionUtil.getClient();
-    }
-
     protected RTMPTClientConnector() {
-        // default ctor for extension purposes
+        httpClient = HttpConnectionUtil.getClient();
     }
 
     public RTMPTClientConnector(String server, int port, RTMPTClient client) {
         targetHost = new HttpUrl.Builder().host(server).port(port).scheme("http").build();
+        httpClient = HttpConnectionUtil.getClient(client.timeoutMsec);
         this.client = client;
     }
 
