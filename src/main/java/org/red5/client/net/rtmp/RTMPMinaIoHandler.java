@@ -156,6 +156,7 @@ public class RTMPMinaIoHandler extends IoHandlerAdapter {
         if (log.isDebugEnabled()) {
             log.error("Exception detail", cause);
         }
+        this.handler.handleException(cause);
     }
 
     /**
