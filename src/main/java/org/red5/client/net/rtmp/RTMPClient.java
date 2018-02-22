@@ -18,7 +18,7 @@
 
 package org.red5.client.net.rtmp;
 
-import java.net.InetSocketAddress;
+import java.net.*;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -79,6 +79,14 @@ public class RTMPClient extends BaseRTMPClientHandler {
         return params;
     }
 
+    public static Inet4Address getInet4AddressByName(String host) throws UnknownHostException, SecurityException {
+        for (InetAddress addr : InetAddress.getAllByName(host)) {
+            if (addr instanceof Inet4Address)
+                return (Inet4Address) addr;
+        }
+        throw new UnknownHostException("No IPv4 address found for " + host);
+    }
+
     /** {@inheritDoc} */
     @Override
     protected void startConnector(String server, int port) {
@@ -91,7 +99,20 @@ public class RTMPClient extends BaseRTMPClientHandler {
         sessionConfig.setWriterIdleTime(timeoutSec);
         sessionConfig.setWriteTimeout(timeoutSec);
         socketConnector.setHandler(ioHandler);
-        future = socketConnector.connect(new InetSocketAddress(server, port));
+        InetSocketAddress address = new InetSocketAddress(server, port);
+
+        // Try to find IPv4 address if only IPv6 address provided
+        // due to bug in Custom android firmware (Flyme)
+        if (address.getAddress() instanceof Inet6Address) {
+            try {
+                Inet4Address inet4 = getInet4AddressByName(server);
+                address = new InetSocketAddress(inet4, port);
+            } catch (UnknownHostException e) {
+                log.error("Cast to IPv4 FAILED: {}", e);
+            }
+        }
+
+        future = socketConnector.connect(address);
         future.addListener(new IoFutureListener<ConnectFuture>() {
             @Override
             public void operationComplete(ConnectFuture future) {
