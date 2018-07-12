@@ -30,7 +30,7 @@ import org.bouncycastle.util.BigIntegers;
 import org.red5.server.net.rtmp.RTMPConnection;
 import org.red5.server.net.rtmp.RTMPHandshake;
 import org.red5.server.net.rtmp.message.Constants;
-import org.red5.server.util.FileUtil;
+//import org.red5.server.util.FileUtil;
 import org.slf4j.LoggerFactory;
 
 /**
@@ -448,22 +448,23 @@ public class OutboundHandshake extends RTMPHandshake {
      * @param swfFilePath path to the swf file or null
      */
     public void initSwfVerification(String swfFilePath) {
-        log.info("Initializing swf verification for: {}", swfFilePath);
-        byte[] bytes = null;
-        if (swfFilePath != null) {
-            File localSwfFile = new File(swfFilePath);
-            if (localSwfFile.exists() && localSwfFile.canRead()) {
-                log.info("Swf file path: {}", localSwfFile.getAbsolutePath());
-                bytes = FileUtil.readAsByteArray(localSwfFile);
-            } else {
-                bytes = "Red5 is awesome for handling non-accessable swf file".getBytes();
-            }
-        } else {
-            bytes = new byte[42];
-        }
-        calculateHMAC_SHA256(bytes, 0, bytes.length, GENUINE_FP_KEY, 30, swfHash, 0);
-        swfSize = bytes.length;
-        log.info("Verification - size: {}, hash: {}", swfSize, Hex.encodeHexString(swfHash));
+        throw new IllegalStateException("initSwfVerification not supported");
+//        log.info("Initializing swf verification for: {}", swfFilePath);
+//        byte[] bytes = null;
+//        if (swfFilePath != null) {
+//            File localSwfFile = new File(swfFilePath);
+//            if (localSwfFile.exists() && localSwfFile.canRead()) {
+//                log.info("Swf file path: {}", localSwfFile.getAbsolutePath());
+//                bytes = FileUtil.readAsByteArray(localSwfFile);
+//            } else {
+//                bytes = "Red5 is awesome for handling non-accessable swf file".getBytes();
+//            }
+//        } else {
+//            bytes = new byte[42];
+//        }
+//        calculateHMAC_SHA256(bytes, 0, bytes.length, GENUINE_FP_KEY, 30, swfHash, 0);
+//        swfSize = bytes.length;
+//        log.info("Verification - size: {}, hash: {}", swfSize, Hex.encodeHexString(swfHash));
     }
 
     public byte[] getHandshakeBytes() {
