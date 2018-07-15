@@ -84,7 +84,6 @@ public class StreamService implements IStreamService {
                 return streamId;
             } catch (IndexOutOfBoundsException e) {
                 log.error("Unable to create stream", e);
-                return -1;
             }
         }
         return -1;
@@ -107,7 +106,6 @@ public class StreamService implements IStreamService {
                 return streamId;
             } catch (IndexOutOfBoundsException e) {
                 log.error("Unable to create stream", e);
-                return -1;
             }
         }
         return -1;
@@ -294,7 +292,7 @@ public class StreamService implements IStreamService {
      *            once, rather than at intervals. If 3, clears the playlist and returns all stream messages at once.
      */
     public void play(String name, int start, int length, Object reset) {
-        throw new IllegalStateException("play not supported");
+        throw new IllegalStateException("play() not supported");
 //        if (reset instanceof Boolean) {
 //            play(name, start, length, ((Boolean) reset).booleanValue());
 //        } else {
@@ -329,7 +327,7 @@ public class StreamService implements IStreamService {
 
     /** {@inheritDoc} */
     public void play(String name, int start, int length, boolean flushPlaylist) {
-        throw new IllegalStateException("play not supported");
+        throw new IllegalStateException("play() not supported");
 //        log.debug("Play called - name: {} start: {} length: {} flush playlist: {}", new Object[] { name, start, length, flushPlaylist });
 //        IConnection conn = Red5.getConnectionLocal();
 //        if (conn instanceof IStreamCapableConnection) {
@@ -532,8 +530,7 @@ public class StreamService implements IStreamService {
      *            play options
      */
     public void play2(Map<String, ?> playOptions) {
-        throw new IllegalStateException("play2 not supported");
-
+        throw new IllegalStateException("play2() not supported");
 //        log.debug("play2 options: {}", playOptions.toString());
 //        /* { streamName=streams/new.flv, oldStreamName=streams/old.flv, 
 //        	start=0, len=-1, offset=12.195, transition=switch } */

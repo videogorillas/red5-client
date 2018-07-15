@@ -18,19 +18,26 @@
 
 package org.red5.server;
 
+//import java.lang.management.ManagementFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+//import javax.management.MBeanServer;
+//import javax.management.ObjectName;
+//import javax.management.StandardMBean;
+
 import org.apache.commons.lang3.StringUtils;
 import org.red5.server.api.IClient;
 import org.red5.server.api.IClientRegistry;
 import org.red5.server.exception.ClientNotFoundException;
 import org.red5.server.exception.ClientRejectedException;
+//import org.red5.server.jmx.mxbeans.ClientRegistryMXBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+//import org.springframework.jmx.export.annotation.ManagedResource;
 
 /**
  * Registry for clients, wherein clients are mapped by their id.

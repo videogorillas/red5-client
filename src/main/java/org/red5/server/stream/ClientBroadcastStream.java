@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.MBeanServer;
@@ -59,6 +60,7 @@ import org.red5.server.api.stream.IStreamCapableConnection;
 import org.red5.server.api.stream.IStreamListener;
 import org.red5.server.api.stream.IStreamPacket;
 import org.red5.server.api.stream.StreamState;
+//import org.red5.server.jmx.mxbeans.ClientBroadcastStreamMXBean;
 import org.red5.server.messaging.IConsumer;
 import org.red5.server.messaging.IFilter;
 import org.red5.server.messaging.IMessage;
@@ -117,12 +119,12 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
     /**
      * Is there need to check video codec?
      */
-    protected boolean checkVideoCodec = false;
+    protected boolean checkVideoCodec;
 
     /**
      * Is there need to check audio codec?
      */
-    protected boolean checkAudioCodec = false;
+    protected boolean checkAudioCodec;
 
     /**
      * Data is sent by chunks, each of them has size
@@ -132,7 +134,7 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
     /**
      * Is this stream still active?
      */
-    protected volatile boolean closed;
+    protected AtomicBoolean closed = new AtomicBoolean(false);
 
     /**
      * Output endpoint that providers use
@@ -202,38 +204,35 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
      */
     public void close() {
         //log.debug("Stream close: {}", publishedName);
-        if (closed) {
-            //log.debug("{} already closed", publishedName);
-            return;
+        if (closed.compareAndSet(false, true)) {
+            if (livePipe != null) {
+                livePipe.unsubscribe((IProvider) this);
+            }
+            // if we have a recording listener, inform that this stream is done
+            if (recordingListener != null) {
+                sendRecordStopNotify();
+                notifyRecordingStop();
+                // inform the listener to finish and close
+                recordingListener.get().stop();
+            }
+            sendPublishStopNotify();
+            // TODO: can we send the client something to make sure he stops sending data?
+            if (connMsgOut != null) {
+                connMsgOut.unsubscribe(this);
+            }
+            notifyBroadcastClose();
+            // clear the listener after all the notifications have been sent
+            if (recordingListener != null) {
+                recordingListener.clear();
+            }
+            // clear listeners
+            if (!listeners.isEmpty()) {
+                listeners.clear();
+            }
+            // deregister with jmx
+            unregisterJMX();
+            setState(StreamState.CLOSED);
         }
-        closed = true;
-        if (livePipe != null) {
-            livePipe.unsubscribe((IProvider) this);
-        }
-        // if we have a recording listener, inform that this stream is done
-        if (recordingListener != null) {
-            sendRecordStopNotify();
-            notifyRecordingStop();
-            // inform the listener to finish and close
-            recordingListener.get().stop();
-        }
-        sendPublishStopNotify();
-        // TODO: can we send the client something to make sure he stops sending data?
-        if (connMsgOut != null) {
-            connMsgOut.unsubscribe(this);
-        }
-        notifyBroadcastClose();
-        // clear the listener after all the notifications have been sent
-        if (recordingListener != null) {
-            recordingListener.clear();
-        }
-        // clear listeners
-        if (!listeners.isEmpty()) {
-            listeners.clear();
-        }
-        // deregister with jmx
-        unregisterJMX();
-        setState(StreamState.CLOSED);
     }
 
     /**
@@ -243,7 +242,7 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
      *            Event to dispatch
      */
     public void dispatchEvent(IEvent event) {
-        if (event instanceof IRTMPEvent && !closed) {
+        if (event instanceof IRTMPEvent && !closed.get()) {
             switch (event.getType()) {
                 case STREAM_CONTROL:
                 case STREAM_DATA:
@@ -332,7 +331,7 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
                         Notify notifyEvent = (Notify) rtmpEvent;
                         String action = notifyEvent.getAction();
                         //if (log.isDebugEnabled()) {
-                            //log.debug("Notify action: {}", action);
+                        //log.debug("Notify action: {}", action);
                         //}
                         if ("onMetaData".equals(action)) {
                             // store the metadata
@@ -618,7 +617,7 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
             case PROVIDER_DISCONNECT:
                 //log.debug("Provider disconnect");
                 //if (log.isDebugEnabled() && livePipe != null) {
-                    //log.debug("Provider: {}", livePipe.getClass().getName());
+                //log.debug("Provider: {}", livePipe.getClass().getName());
                 //}
                 if (livePipe == event.getSource()) {
                     livePipe = null;
@@ -628,7 +627,7 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
                 //log.debug("Consumer connect");
                 IPipe pipe = (IPipe) event.getSource();
                 //if (log.isDebugEnabled() && pipe != null) {
-                    //log.debug("Consumer: {}", pipe.getClass().getName());
+                //log.debug("Consumer: {}", pipe.getClass().getName());
                 //}
                 if (livePipe == pipe) {
                     notifyChunkSize();
@@ -878,7 +877,6 @@ public class ClientBroadcastStream extends AbstractClientStream implements IClie
         if (connMsgOut != null && connMsgOut.subscribe(this, null)) {
             // technically this would be a 'start' time
             startTime = System.currentTimeMillis();
-            closed = false;
         } else {
             log.warn("Subscribe failed");
         }

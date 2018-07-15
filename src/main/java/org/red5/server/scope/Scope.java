@@ -20,7 +20,7 @@ package org.red5.server.scope;
 
 import java.beans.ConstructorProperties;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
+//import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,10 +31,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import javax.management.StandardMBean;
-import javax.management.openmbean.CompositeData;
+//import javax.management.MBeanServer;
+//import javax.management.ObjectName;
+//import javax.management.StandardMBean;
+//import javax.management.openmbean.CompositeData;
 
 import org.apache.commons.lang3.StringUtils;
 import org.red5.server.AttributeStore;
@@ -59,7 +59,7 @@ import org.red5.server.exception.ScopeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
-import org.springframework.jmx.export.annotation.ManagedResource;
+//import org.springframework.jmx.export.annotation.ManagedResource;
 
 /**
  * The scope object. <br>
@@ -78,7 +78,7 @@ import org.springframework.jmx.export.annotation.ManagedResource;
  * @author Paul Gregoire (mondain@gmail.com)
  * @author Nathan Smith (nathgs@gmail.com)
  */
-@ManagedResource(objectName = "org.red5.server:type=Scope", description = "Scope")
+//@ManagedResource(objectName = "org.red5.server:type=Scope", description = "Scope")
 public class Scope extends BasicScope implements IScope, IScopeStatistics {
 
     protected static Logger log = LoggerFactory.getLogger(Scope.class);
@@ -156,7 +156,7 @@ public class Scope extends BasicScope implements IScope, IScopeStatistics {
     /**
      * Mbean object name.
      */
-    protected ObjectName oName;
+//    protected ObjectName oName;
 
     {
         creationTime = System.currentTimeMillis();
@@ -1032,15 +1032,16 @@ public class Scope extends BasicScope implements IScope, IScopeStatistics {
      * @param name
      *            Scope name
      */
+//    @Override
     public final void setName(String name) {
         log.debug("Set name: {}", name);
         if (this.name == null && StringUtils.isNotBlank(name)) {
             // reset of the name is no longer allowed
             this.name = name;
             // unregister from jmx
-            if (oName != null) {
-                unregisterJMX();
-            }
+//            if (oName != null) {
+//                unregisterJMX();
+//            }
             // register
             registerJMX();
         } else {
@@ -1201,32 +1202,32 @@ public class Scope extends BasicScope implements IScope, IScopeStatistics {
 
     protected void registerJMX() {
         // register with jmx
-        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-        try {
-            String cName = this.getClass().getName();
-            if (cName.indexOf('.') != -1) {
-                cName = cName.substring(cName.lastIndexOf('.')).replaceFirst("[\\.]", "");
-            }
-            oName = new ObjectName(String.format("org.red5.server:type=%s,name=%s", cName, name));
+//        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+//        try {
+//            String cName = this.getClass().getName();
+//            if (cName.indexOf('.') != -1) {
+//                cName = cName.substring(cName.lastIndexOf('.')).replaceFirst("[\\.]", "");
+//            }
+//            oName = new ObjectName(String.format("org.red5.server:type=%s,name=%s", cName, name));
             // don't reregister
 //            if (!mbs.isRegistered(oName)) {
 //                mbs.registerMBean(new StandardMBean(this, ScopeMXBean.class, true), oName);
 //            }
-        } catch (Exception e) {
-            log.warn("Error on jmx registration", e);
-        }
+//        } catch (Exception e) {
+//            log.warn("Error on jmx registration", e);
+//        }
     }
 
     protected void unregisterJMX() {
-        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-        if (oName != null && mbs.isRegistered(oName)) {
-            try {
-                mbs.unregisterMBean(oName);
-            } catch (Exception e) {
-                log.warn("Exception unregistering: {}", oName, e);
-            }
-            oName = null;
-        }
+//        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+//        if (oName != null && mbs.isRegistered(oName)) {
+//            try {
+//                mbs.unregisterMBean(oName);
+//            } catch (Exception e) {
+//                log.warn("Exception unregistering: {}", oName, e);
+//            }
+//            oName = null;
+//        }
     }
 
     /**
@@ -1235,25 +1236,25 @@ public class Scope extends BasicScope implements IScope, IScopeStatistics {
      * @param cd composite data
      * @return Scope class instance
      */
-    public static Scope from(CompositeData cd) {
-        IScope parent = null;
-        ScopeType type = ScopeType.UNDEFINED;
-        String name = null;
-        boolean persistent = false;
-        if (cd.containsKey("parent")) {
-            parent = (IScope) cd.get("parent");
-        }
-        if (cd.containsKey("type")) {
-            type = (ScopeType) cd.get("type");
-        }
-        if (cd.containsKey("name")) {
-            name = (String) cd.get("name");
-        }
-        if (cd.containsKey("persistent")) {
-            persistent = (Boolean) cd.get("persistent");
-        }
-        return new Scope(new Builder(parent, type, name, persistent));
-    }
+//    public static Scope from(CompositeData cd) {
+//        IScope parent = null;
+//        ScopeType type = ScopeType.UNDEFINED;
+//        String name = null;
+//        boolean persistent = false;
+//        if (cd.containsKey("parent")) {
+//            parent = (IScope) cd.get("parent");
+//        }
+//        if (cd.containsKey("type")) {
+//            type = (ScopeType) cd.get("type");
+//        }
+//        if (cd.containsKey("name")) {
+//            name = (String) cd.get("name");
+//        }
+//        if (cd.containsKey("persistent")) {
+//            persistent = (Boolean) cd.get("persistent");
+//        }
+//        return new Scope(new Builder(parent, type, name, persistent));
+//    }
 
     @Override
     public int hashCode() {
