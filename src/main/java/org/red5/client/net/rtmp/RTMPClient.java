@@ -116,33 +116,11 @@ public class RTMPClient extends BaseRTMPClientHandler {
         sessionConfig.setWriterIdleTime(timeoutSec);
         sessionConfig.setWriteTimeout(timeoutSec);
         socketConnector.setHandler(ioHandler);
-        InetSocketAddress address = null;
-
-        // Try to find IPv4 address if only IPv6 address provided
-        // due to bug in custom android firmware (Flyme)
-        // also covers socket.connect timeout if server name is provided and dns is slow
-        Future<Inet4Address> ipaddrFuture = dnsExecutor.submit(new Callable<Inet4Address>() {
-            @Override
-            public Inet4Address call() throws Exception {
-                return getInet4AddressByName(server);
-            }
-        });
-        try {
-            Inet4Address inet4 = ipaddrFuture.get(timeoutMsec, TimeUnit.MILLISECONDS);
-            address = new InetSocketAddress(inet4, port);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            handleException(e);
-        } catch (ExecutionException e) {
-            log.error("cant lookup ip addr of {}", server, e);
-            handleException(e);
-        } catch (TimeoutException e) {
-            log.error("timeout lookup ip addr of {}", server, e);
-            handleException(e);
-        }
-        if (address == null) {
+        Inet4Address ipAddr = lookup(server);
+        if (ipAddr == null) {
             return;
         }
+        InetSocketAddress address = new InetSocketAddress(ipAddr, port);
 
         long start = System.currentTimeMillis();
         future = socketConnector.connect(address);
@@ -167,6 +145,36 @@ public class RTMPClient extends BaseRTMPClientHandler {
             log.error("cant connect to {} connect timeout {} reached ", server, timeoutMsec);
             handleException(new ConnectException("Connection timed out."));
         }
+    }
+
+    /**
+     * Try to find IPv4 address
+     * due to bug in custom android firmware (Flyme)
+     * also covers socket.connect timeout if server name is provided and dns is slow
+     *
+     * @param server
+     * @return null if not found or timeout or ipv4 address of server
+     */
+    private Inet4Address lookup(String server) {
+        Future<Inet4Address> ipaddrFuture = dnsExecutor.submit(new Callable<Inet4Address>() {
+            @Override
+            public Inet4Address call() throws Exception {
+                return getInet4AddressByName(server);
+            }
+        });
+        try {
+            return ipaddrFuture.get(timeoutMsec, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            handleException(e);
+        } catch (ExecutionException e) {
+            log.error("cant lookup ip addr of {}", server, e);
+            handleException(e);
+        } catch (TimeoutException e) {
+            log.error("timeout lookup ip addr of {}", server, e);
+            handleException(e);
+        }
+        return null;
     }
 
     /** {@inheritDoc} */
