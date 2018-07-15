@@ -20,7 +20,15 @@ package org.red5.client.net.rtmp;
 
 import java.net.*;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.mina.core.future.CloseFuture;
 import org.apache.mina.core.future.ConnectFuture;
@@ -46,7 +54,16 @@ import org.slf4j.LoggerFactory;
  * @author Jon Valliere
  */
 public class RTMPClient extends BaseRTMPClientHandler {
-
+    private final static ExecutorService dnsExecutor = Executors.newCachedThreadPool(new ThreadFactory() {
+        AtomicInteger counter = new AtomicInteger();
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(r);
+            t.setName("RTMPClient-dns-" + counter.getAndIncrement());
+            t.setDaemon(true);
+            return t;
+        }
+    });
     private static final Logger log = LoggerFactory.getLogger(RTMPClient.class);
 
     // I/O handler
@@ -99,20 +116,38 @@ public class RTMPClient extends BaseRTMPClientHandler {
         sessionConfig.setWriterIdleTime(timeoutSec);
         sessionConfig.setWriteTimeout(timeoutSec);
         socketConnector.setHandler(ioHandler);
-        InetSocketAddress address = new InetSocketAddress(server, port);
+        InetSocketAddress address = null;
 
         // Try to find IPv4 address if only IPv6 address provided
-        // due to bug in Custom android firmware (Flyme)
-        if (address.getAddress() instanceof Inet6Address) {
-            try {
-                Inet4Address inet4 = getInet4AddressByName(server);
-                address = new InetSocketAddress(inet4, port);
-            } catch (UnknownHostException e) {
-                log.error("Cast to IPv4 FAILED: {}", e);
+        // due to bug in custom android firmware (Flyme)
+        // also covers socket.connect timeout if server name is provided and dns is slow
+        Future<Inet4Address> ipaddrFuture = dnsExecutor.submit(new Callable<Inet4Address>() {
+            @Override
+            public Inet4Address call() throws Exception {
+                return getInet4AddressByName(server);
             }
+        });
+        try {
+            Inet4Address inet4 = ipaddrFuture.get(timeoutMsec, TimeUnit.MILLISECONDS);
+            address = new InetSocketAddress(inet4, port);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            handleException(e);
+        } catch (ExecutionException e) {
+            log.error("cant lookup ip addr of {}", server, e);
+            handleException(e);
+        } catch (TimeoutException e) {
+            log.error("timeout lookup ip addr of {}", server, e);
+            handleException(e);
+        }
+        if (address == null) {
+            return;
         }
 
+        long start = System.currentTimeMillis();
         future = socketConnector.connect(address);
+        long time = System.currentTimeMillis() - start;
+        log.debug("socketConnector.connect {} took {}msec", address, time);
         future.addListener(new IoFutureListener<ConnectFuture>() {
             @Override
             public void operationComplete(ConnectFuture future) {
@@ -127,7 +162,11 @@ public class RTMPClient extends BaseRTMPClientHandler {
             }
         });
         // Now wait for the connect to be completed
-        future.awaitUninterruptibly(timeoutMsec);
+        boolean finished = future.awaitUninterruptibly(timeoutMsec);
+        if (!finished) {
+            log.error("cant connect to {} connect timeout {} reached ", server, timeoutMsec);
+            handleException(new ConnectException("Connection timed out."));
+        }
     }
 
     /** {@inheritDoc} */
