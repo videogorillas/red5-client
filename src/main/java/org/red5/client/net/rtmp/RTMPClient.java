@@ -21,13 +21,11 @@ package org.red5.client.net.rtmp;
 import java.net.*;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.mina.core.future.CloseFuture;
@@ -40,6 +38,8 @@ import org.apache.mina.transport.socket.nio.NioSocketConnector;
 import org.red5.io.utils.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import okhttp3.Dns;
 
 /**
  * RTMP client implementation supporting "rtmp" and "rtmpe" protocols.
@@ -65,6 +65,7 @@ public class RTMPClient extends BaseRTMPClientHandler {
         }
     });
     private static final Logger log = LoggerFactory.getLogger(RTMPClient.class);
+    private final Dns dns;
 
     // I/O handler
     protected RTMPMinaIoHandler ioHandler;
@@ -82,6 +83,14 @@ public class RTMPClient extends BaseRTMPClientHandler {
 
     /** Constructs a new RTMPClient. */
     public RTMPClient() {
+        this(Dns.SYSTEM);
+        ioHandler = new RTMPMinaIoHandler();
+        ioHandler.setHandler(this);
+    }
+
+    /** Constructs a new RTMPClient. */
+    public RTMPClient(Dns dns) {
+        this.dns = dns;
         ioHandler = new RTMPMinaIoHandler();
         ioHandler.setHandler(this);
     }
@@ -94,14 +103,6 @@ public class RTMPClient extends BaseRTMPClientHandler {
             params.put("tcUrl", String.format("%s://%s:%s/%s", protocol, server, port, application));
         }
         return params;
-    }
-
-    public static Inet4Address getInet4AddressByName(String host) throws UnknownHostException, SecurityException {
-        for (InetAddress addr : InetAddress.getAllByName(host)) {
-            if (addr instanceof Inet4Address)
-                return (Inet4Address) addr;
-        }
-        throw new UnknownHostException("No IPv4 address found for " + host);
     }
 
     /** {@inheritDoc} */
@@ -159,31 +160,23 @@ public class RTMPClient extends BaseRTMPClientHandler {
         Future<Inet4Address> ipaddrFuture = dnsExecutor.submit(new Callable<Inet4Address>() {
             @Override
             public Inet4Address call() throws Exception {
-                return getInet4AddressByName(server);
+                for (InetAddress addr : dns.lookup(server)) {
+                    if (addr instanceof Inet4Address)
+                        return (Inet4Address) addr;
+                }
+                throw new UnknownHostException("No IPv4 address found for " + server);
             }
         });
         try {
             return ipaddrFuture.get(timeoutMsec, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             if (log.isDebugEnabled()) {
                 log.error("cant lookup ip addr of {}", server, e);
             } else {
                 log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
             }
-            Thread.currentThread().interrupt();
-            handleException(e);
-        } catch (ExecutionException e) {
-            if (log.isDebugEnabled()) {
-                log.error("cant lookup ip addr of {}", server, e);
-            } else {
-                log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
-            }
-            handleException(e);
-        } catch (TimeoutException e) {
-            if (log.isDebugEnabled()) {
-                log.error("cant lookup ip addr of {}", server, e);
-            } else {
-                log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
             }
             handleException(e);
         }
