@@ -165,16 +165,37 @@ public class RTMPClient extends BaseRTMPClientHandler {
         try {
             return ipaddrFuture.get(timeoutMsec, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            if (log.isDebugEnabled()) {
+                log.error("cant lookup ip addr of {}", server, e);
+            } else {
+                log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
+            }
             Thread.currentThread().interrupt();
             handleException(e);
         } catch (ExecutionException e) {
-            log.error("cant lookup ip addr of {}", server, e);
+            if (log.isDebugEnabled()) {
+                log.error("cant lookup ip addr of {}", server, e);
+            } else {
+                log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
+            }
             handleException(e);
         } catch (TimeoutException e) {
-            log.error("timeout lookup ip addr of {}", server, e);
+            if (log.isDebugEnabled()) {
+                log.error("cant lookup ip addr of {}", server, e);
+            } else {
+                log.error("cant lookup ip addr of {} {}", server, getRootCause(e).toString());
+            }
             handleException(e);
         }
         return null;
+    }
+
+    public static Throwable getRootCause(Throwable throwable) {
+        Throwable cause;
+        while ((cause = throwable.getCause()) != null) {
+            throwable = cause;
+        }
+        return throwable;
     }
 
     /** {@inheritDoc} */
