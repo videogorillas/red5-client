@@ -158,7 +158,7 @@ public class RTMPMinaIoHandler extends IoHandlerAdapter {
     /** {@inheritDoc} */
     @Override
     public void exceptionCaught(IoSession session, Throwable cause) throws Exception {
-        log.warn("Exception caught {}", cause.getMessage());
+        log.warn("Exception caught {}", cause.toString());
         if (log.isDebugEnabled()) {
             log.error("Exception detail", cause);
         }
